@@ -72,6 +72,16 @@
             background-color: #3d3d5c;
             border-radius: 4px;
         }
+        .task-progress {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #2d2d44;
+            border-radius: 8px;
+        }
+        .task-status {
+            font-size: 0.9rem;
+            color: #b2bec3;
+        }
     </style>
 </head>
 <body>
@@ -152,7 +162,7 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
                             <li><a class="dropdown-item" href="{{ url_for('profile') }}">Профиль</a></li>
-                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#updateDataModal">Обновить данные</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="showTaskManager()">Менеджер задач</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('logout') }}">Выйти</a></li>
                         </ul>
@@ -330,6 +340,36 @@
         </div>
     </div>
 
+    <!-- Модальное окно для менеджера задач -->
+    <div class="modal fade" id="taskManagerModal" tabindex="-1" aria-labelledby="taskManagerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taskManagerModalLabel">
+                        <i class="bi bi-list-task"></i> Менеджер задач
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tasksList">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                            <p class="mt-2">Загрузка задач...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary" onclick="refreshTasks()">
+                        <i class="bi bi-arrow-repeat"></i> Обновить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Прогресс-бар для отслеживания обновления -->
     <div class="modal fade" id="progressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -342,13 +382,16 @@
                 <div class="modal-body">
                     <p id="progressStatus">Подготовка к обновлению...</p>
                     <div class="progress mb-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
                              id="progressBar" role="progressbar" style="width: 0%"></div>
                     </div>
                     <div class="text-center" id="progressDetails"></div>
+                    <div class="task-progress" id="taskProgressInfo" style="display: none;">
+                        <small class="task-status" id="taskStatus"></small>
+                    </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="closeProgressBtn" disabled onclick="closeProgressModal()">
+                    <button type="button" class="btn btn-secondary" id="closeProgressBtn" onclick="closeProgressModal()">
                         Закрыть
                     </button>
                 </div>
@@ -403,38 +446,42 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
+    
     <script>
-        // Глобальные функции для управления данными
+        // Хранилище активных task_id
+        let currentTaskId = null;
+        let taskCheckInterval = null;
 
+        // Глобальные функции для управления данными
+        
         // Функции для обновления вакансий
         function updateVacancies(type) {
             let title = type === 'quick' ? 'Быстрое обновление вакансий' : 'Полное обновление вакансий';
-            let message = type === 'quick' ? 'Обновление IT-вакансий...' : 'Обновление всех вакансий...';
-
+            let message = type === 'quick' ? 'Запуск быстрого обновления IT-вакансий...' : 'Запуск полного обновления всех вакансий...';
+            
             showProgress(title, message);
-
+            
             $.ajax({
-                url: '/api/update-data',
+                url: '/api/update-data-background',
                 method: 'POST',
-                data: {
+                data: { 
                     type: type,
                     data_type: 'vacancies'
                 },
                 success: function(data) {
-                    updateProgress(100, 'Обновление вакансий завершено!');
-                    setTimeout(() => {
-                        $('#progressModal').modal('hide');
-                        showNotification('Вакансии успешно обновлены', 'success');
-                        location.reload();
-                    }, 1500);
+                    currentTaskId = data.task_id;
+                    updateProgress(30, 'Обновление запущено в фоновом режиме');
+                    $('#progressDetails').html(`ID задачи: ${data.task_id}<br>Статус: <span id="taskStatus">выполняется...</span>`);
+                    
+                    // Начинаем проверять статус задачи
+                    startTaskMonitoring(currentTaskId);
                 },
                 error: function(xhr, status, error) {
                     console.error('Error:', error);
-                    updateProgress(0, 'Ошибка при обновлении вакансий');
+                    updateProgress(0, 'Ошибка при запуске обновления');
                     setTimeout(() => {
                         $('#progressModal').modal('hide');
-                        showNotification('Ошибка при обновлении вакансий', 'danger');
+                        showNotification('Ошибка при запуске обновления вакансий', 'danger');
                     }, 2000);
                 }
             });
@@ -443,31 +490,31 @@
         // Функции для обновления курсов
         function updateCourses(type) {
             let title = type === 'quick' ? 'Быстрое обновление курсов' : 'Полное обновление курсов';
-            let message = type === 'quick' ? 'Обновление IT-курсов...' : 'Обновление всех курсов...';
-
+            let message = type === 'quick' ? 'Запуск быстрого обновления IT-курсов...' : 'Запуск полного обновления всех курсов...';
+            
             showProgress(title, message);
-
+            
             $.ajax({
-                url: '/api/update-data',
+                url: '/api/update-data-background',
                 method: 'POST',
-                data: {
+                data: { 
                     type: type,
                     data_type: 'courses'
                 },
                 success: function(data) {
-                    updateProgress(100, 'Обновление курсов завершено!');
-                    setTimeout(() => {
-                        $('#progressModal').modal('hide');
-                        showNotification('Курсы успешно обновлены', 'success');
-                        location.reload();
-                    }, 1500);
+                    currentTaskId = data.task_id;
+                    updateProgress(30, 'Обновление запущено в фоновом режиме');
+                    $('#progressDetails').html(`ID задачи: ${data.task_id}<br>Статус: <span id="taskStatus">выполняется...</span>`);
+                    
+                    // Начинаем проверять статус задачи
+                    startTaskMonitoring(currentTaskId);
                 },
                 error: function(xhr, status, error) {
                     console.error('Error:', error);
-                    updateProgress(0, 'Ошибка при обновлении курсов');
+                    updateProgress(0, 'Ошибка при запуске обновления');
                     setTimeout(() => {
                         $('#progressModal').modal('hide');
-                        showNotification('Ошибка при обновлении курсов', 'danger');
+                        showNotification('Ошибка при запуске обновления курсов', 'danger');
                     }, 2000);
                 }
             });
@@ -479,37 +526,37 @@
             $('.vacancy-cat:checked').each(function() {
                 categories.push($(this).val());
             });
-
+            
             if (categories.length === 0) {
                 showNotification('Выберите хотя бы одну категорию', 'warning');
                 return;
             }
-
+            
             $('#vacancyCategoryModal').modal('hide');
             showProgress('Обновление вакансий по категориям', `Выбрано категорий: ${categories.length}`);
-
+            
             $.ajax({
-                url: '/api/update-data',
+                url: '/api/update-data-background',
                 method: 'POST',
-                data: {
+                data: { 
                     type: 'categories',
                     categories: JSON.stringify(categories),
                     data_type: 'vacancies'
                 },
                 success: function(data) {
-                    updateProgress(100, 'Обновление вакансий завершено!');
-                    setTimeout(() => {
-                        $('#progressModal').modal('hide');
-                        showNotification('Вакансии успешно обновлены', 'success');
-                        location.reload();
-                    }, 1500);
+                    currentTaskId = data.task_id;
+                    updateProgress(30, 'Обновление запущено в фоновом режиме');
+                    $('#progressDetails').html(`ID задачи: ${data.task_id}<br>Статус: <span id="taskStatus">выполняется...</span>`);
+                    
+                    // Начинаем проверять статус задачи
+                    startTaskMonitoring(currentTaskId);
                 },
                 error: function(xhr, status, error) {
                     console.error('Error:', error);
-                    updateProgress(0, 'Ошибка при обновлении вакансий');
+                    updateProgress(0, 'Ошибка при запуске обновления');
                     setTimeout(() => {
                         $('#progressModal').modal('hide');
-                        showNotification('Ошибка при обновлении вакансий', 'danger');
+                        showNotification('Ошибка при запуске обновления вакансий', 'danger');
                     }, 2000);
                 }
             });
@@ -521,40 +568,103 @@
             $('.course-cat:checked').each(function() {
                 categories.push($(this).val());
             });
-
+            
             if (categories.length === 0) {
                 showNotification('Выберите хотя бы одну категорию', 'warning');
                 return;
             }
-
+            
             $('#courseCategoryModal').modal('hide');
             showProgress('Обновление курсов по категориям', `Выбрано категорий: ${categories.length}`);
-
+            
             $.ajax({
-                url: '/api/update-data',
+                url: '/api/update-data-background',
                 method: 'POST',
-                data: {
+                data: { 
                     type: 'categories',
                     categories: JSON.stringify(categories),
                     data_type: 'courses'
                 },
                 success: function(data) {
-                    updateProgress(100, 'Обновление курсов завершено!');
-                    setTimeout(() => {
-                        $('#progressModal').modal('hide');
-                        showNotification('Курсы успешно обновлены', 'success');
-                        location.reload();
-                    }, 1500);
+                    currentTaskId = data.task_id;
+                    updateProgress(30, 'Обновление запущено в фоновом режиме');
+                    $('#progressDetails').html(`ID задачи: ${data.task_id}<br>Статус: <span id="taskStatus">выполняется...</span>`);
+                    
+                    // Начинаем проверять статус задачи
+                    startTaskMonitoring(currentTaskId);
                 },
                 error: function(xhr, status, error) {
                     console.error('Error:', error);
-                    updateProgress(0, 'Ошибка при обновлении курсов');
+                    updateProgress(0, 'Ошибка при запуске обновления');
                     setTimeout(() => {
                         $('#progressModal').modal('hide');
-                        showNotification('Ошибка при обновлении курсов', 'danger');
+                        showNotification('Ошибка при запуске обновления курсов', 'danger');
                     }, 2000);
                 }
             });
+        }
+
+        // Функция для мониторинга статуса задачи
+        function startTaskMonitoring(taskId) {
+            if (taskCheckInterval) {
+                clearInterval(taskCheckInterval);
+            }
+            
+            taskCheckInterval = setInterval(function() {
+                checkTaskStatus(taskId);
+            }, 2000); // Проверяем каждые 2 секунды
+        }
+
+        function checkTaskStatus(taskId) {
+            $.ajax({
+                url: `/api/task-status/${taskId}`,
+                method: 'GET',
+                success: function(data) {
+                    $('#taskStatus').text(data.message || 'выполняется...');
+                    
+                    if (data.progress) {
+                        $('#progressBar').css('width', data.progress + '%');
+                    }
+                    
+                    if (data.status === 'completed') {
+                        clearInterval(taskCheckInterval);
+                        updateProgress(100, 'Обновление успешно завершено!');
+                        $('#closeProgressBtn').prop('disabled', false);
+                        showNotification('Данные успешно обновлены', 'success');
+                        setTimeout(() => {
+                            $('#progressModal').modal('hide');
+                            location.reload();
+                        }, 2000);
+                    }
+                    else if (data.status === 'error') {
+                        clearInterval(taskCheckInterval);
+                        updateProgress(0, 'Ошибка при обновлении');
+                        $('#closeProgressBtn').prop('disabled', false);
+                        showNotification('Ошибка при обновлении данных: ' + data.message, 'danger');
+                    }
+                },
+                error: function() {
+                    console.log('Ошибка при проверке статуса задачи');
+                }
+            });
+        }
+
+        // Показать менеджер задач
+        function showTaskManager() {
+            $('#taskManagerModal').modal('show');
+            refreshTasks();
+        }
+
+        function refreshTasks() {
+            // Здесь можно добавить логику для отображения списка задач
+            $('#tasksList').html(`
+                <div class="text-center py-4">
+                    <p>Текущая задача: ${currentTaskId || 'нет активных задач'}</p>
+                    <button class="btn btn-sm btn-primary" onclick="checkTaskStatus('${currentTaskId}')">
+                        Проверить статус
+                    </button>
+                </div>
+            `);
         }
 
         // Показать статус данных
@@ -609,32 +719,43 @@
         function showProgress(title, message) {
             $('#progressStatus').text(message);
             $('#progressBar').css('width', '0%');
+            $('#closeProgressBtn').prop('disabled', true);
             $('#progressModal').modal('show');
-
-            window.progressInterval = setInterval(function() {
-                let currentWidth = parseInt($('#progressBar').css('width'));
-                if (currentWidth < 90) {
-                    $('#progressBar').css('width', (currentWidth + 2) + '%');
+            
+            // Анимация до 30% пока ждем ответа от сервера
+            let initialProgress = 0;
+            let interval = setInterval(function() {
+                if (initialProgress < 30) {
+                    initialProgress += 2;
+                    $('#progressBar').css('width', initialProgress + '%');
+                } else {
+                    clearInterval(interval);
                 }
-            }, 1000);
+            }, 500);
+            
+            window.progressInterval = interval;
         }
 
         function updateProgress(percent, finalMessage) {
-            clearInterval(window.progressInterval);
+            if (window.progressInterval) {
+                clearInterval(window.progressInterval);
+            }
             $('#progressBar').css('width', percent + '%');
             $('#progressDetails').text(finalMessage);
-            $('#closeProgressBtn').prop('disabled', false);
         }
 
         function closeProgressModal() {
             $('#progressModal').modal('hide');
+            if (taskCheckInterval) {
+                clearInterval(taskCheckInterval);
+            }
         }
 
         // Функция для показа уведомлений
         function showNotification(message, type) {
             let icon = 'info-circle';
             let bgClass = 'alert-info';
-
+            
             if (type === 'success') {
                 icon = 'check-circle';
                 bgClass = 'alert-success';
@@ -645,7 +766,7 @@
                 icon = 'exclamation-circle';
                 bgClass = 'alert-danger';
             }
-
+            
             let notification = `
                 <div class="alert ${bgClass} alert-dismissible fade show notification-toast" role="alert">
                     <i class="bi bi-${icon} me-2"></i>
@@ -653,9 +774,9 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `;
-
+            
             $('#notification-area').html(notification);
-
+            
             setTimeout(function() {
                 $('.notification-toast').fadeOut('slow', function() {
                     $(this).remove();
@@ -668,6 +789,12 @@
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Очистка старых задач при загрузке страницы
+            $.ajax({
+                url: '/api/cleanup-tasks',
+                method: 'POST'
             });
         });
     </script>
