@@ -446,10 +446,10 @@ def remove_skill(skill_id):
 
 
 def run_update_task(task_id, update_type, data_type, categories=None):
-    """Функция для выполнения обновления в фоновом потоке"""
+    """Функция для выполнения обновления в фоновом потоке с детальным прогрессом"""
     try:
         from update_data import update_data
-
+        
         # Обновляем статус задачи
         background_tasks[task_id] = {
             'status': 'running',
@@ -457,50 +457,93 @@ def run_update_task(task_id, update_type, data_type, categories=None):
             'message': 'Запуск обновления...',
             'start_time': datetime.now().isoformat()
         }
+        time.sleep(1)
 
         with app.app_context():
-            # Обновляем прогресс
+            # Обновляем прогресс - 10%
             background_tasks[task_id]['progress'] = 10
             background_tasks[task_id]['message'] = 'Инициализация парсеров...'
+            time.sleep(1)
 
             # Запускаем обновление в зависимости от типа
             if data_type == 'vacancies':
+                background_tasks[task_id]['message'] = 'Подготовка к парсингу вакансий...'
+                background_tasks[task_id]['progress'] = 15
+                time.sleep(1)
+
+                # Создаем кастомный прогресс для парсинга
+                class ProgressCallback:
+                    def __init__(self, task_id, total_steps):
+                        self.task_id = task_id
+                        self.total_steps = total_steps
+                        self.current_step = 0
+                    
+                    def update(self, step_name, progress_increment):
+                        self.current_step += progress_increment
+                        new_progress = min(15 + self.current_step, 90)
+                        background_tasks[self.task_id]['progress'] = new_progress
+                        background_tasks[self.task_id]['message'] = step_name
+                        time.sleep(0.5)
+
                 if update_type == 'quick':
                     background_tasks[task_id]['message'] = 'Быстрое обновление вакансий (IT)...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(quick=True, vacancies_only=True)
+                    
                 elif update_type == 'categories' and categories:
                     background_tasks[task_id]['message'] = f'Обновление вакансий по категориям: {categories}...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(categories=categories, vacancies_only=True)
+                    
                 else:
                     background_tasks[task_id]['message'] = 'Полное обновление всех вакансий...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(quick=False, vacancies_only=True)
 
             elif data_type == 'courses':
+                background_tasks[task_id]['message'] = 'Подготовка к парсингу курсов...'
+                background_tasks[task_id]['progress'] = 15
+                time.sleep(1)
+
                 if update_type == 'quick':
                     background_tasks[task_id]['message'] = 'Быстрое обновление курсов (IT)...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(quick=True, courses_only=True)
+                    
                 elif update_type == 'categories' and categories:
                     background_tasks[task_id]['message'] = f'Обновление курсов по категориям: {categories}...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(categories=categories, courses_only=True)
+                    
                 else:
                     background_tasks[task_id]['message'] = 'Полное обновление всех курсов...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(quick=False, courses_only=True)
 
-            else:  # обновление всего
+            else:
+                background_tasks[task_id]['message'] = 'Подготовка к обновлению всех данных...'
+                background_tasks[task_id]['progress'] = 15
+                time.sleep(1)
+
                 if update_type == 'quick':
                     background_tasks[task_id]['message'] = 'Быстрое обновление всех данных (IT)...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(quick=True)
+                    
                 elif update_type == 'categories' and categories:
                     background_tasks[task_id]['message'] = f'Обновление всех данных по категориям: {categories}...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(categories=categories)
+                    
                 else:
                     background_tasks[task_id]['message'] = 'Полное обновление всех данных...'
+                    background_tasks[task_id]['progress'] = 20
                     update_data(quick=False)
 
             # Обновляем прогресс до 90%
             background_tasks[task_id]['progress'] = 90
             background_tasks[task_id]['message'] = 'Сохранение результатов...'
-            time.sleep(1)
+            time.sleep(2)
 
             # Завершаем задачу
             background_tasks[task_id]['status'] = 'completed'
