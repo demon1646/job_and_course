@@ -20,6 +20,13 @@ from recommender import RecommenderSystem
 app = Flask(__name__)
 app.config.from_object(Config)
 
+# Исправление для Render PostgreSQL
+if os.environ.get('DATABASE_URL'):
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+
 # Инициализация расширений
 db.init_app(app)
 login_manager = LoginManager()
@@ -32,6 +39,9 @@ db_manager = DatabaseManager()
 recommender = RecommenderSystem()
 job_scraper = JobScraper()
 course_scraper = CourseScraper()
+
+# Словарь для отслеживания статуса фоновых задач
+background_tasks = {}
 
 
 @login_manager.user_loader
@@ -369,23 +379,23 @@ def api_recommendations():
 
     try:
         if content_type == 'vacancy':
-            recommendations = recommender.recommend_vacancies(current_user.id, limit)
+            items = recommender.recommend_vacancies(current_user.id, limit)
             data = [{
-                'id': v.id,
-                'title': v.title,
-                'company': v.company,
-                'location': v.location,
-                'salary': v.get_salary_display()
-            } for v in recommendations]
+                'id': item.id,
+                'title': item.title,
+                'company': item.company,
+                'location': item.location,
+                'salary': item.get_salary_display()
+            } for item in items]
         else:
-            recommendations = recommender.recommend_courses(current_user.id, limit)
+            items = recommender.recommend_courses(current_user.id, limit)
             data = [{
-                'id': c.id,
-                'title': c.title,
-                'provider': c.provider,
-                'rating': c.rating,
-                'price': c.price
-            } for c in recommendations]
+                'id': item.id,
+                'title': item.title,
+                'provider': item.provider,
+                'rating': item.rating,
+                'price': item.price
+            } for item in items]
     except Exception as e:
         print(f"API recommendations error: {e}")
         data = []
@@ -403,38 +413,6 @@ def api_analyze_profile():
     except Exception as e:
         print(f"API analyze error: {e}")
         return jsonify({'error': str(e)}), 500
-
-
-@app.route('/scrape', methods=['POST'])
-@login_required
-def scrape_data():
-    """Запуск парсинга данных"""
-    source = request.form.get('source')
-    query = request.form.get('query')
-
-    try:
-        if source == 'hh':
-            vacancies = job_scraper.parse_hh_vacancies(query, pages=2)
-            saved = job_scraper.save_vacancies_to_db(vacancies)
-            flash(f'Сохранено {saved} вакансий с hh.ru')
-        elif source == 'habr':
-            vacancies = job_scraper.parse_habr_vacancies(query, pages=2)
-            saved = job_scraper.save_vacancies_to_db(vacancies)
-            flash(f'Сохранено {saved} вакансий с Habr Career')
-        elif source == 'trudvsem':
-            vacancies = job_scraper.parse_trudvsem_vacancies(query, pages=2)
-            saved = job_scraper.save_vacancies_to_db(vacancies)
-            flash(f'Сохранено {saved} вакансий с Trudvsem')
-        elif source == 'stepik':
-            courses = course_scraper.parse_stepik_courses(query, pages=2)
-            saved = course_scraper.save_courses_to_db(courses)
-            flash(f'Сохранено {saved} курсов с Stepik')
-        else:
-            flash('Неизвестный источник')
-    except Exception as e:
-        flash(f'Ошибка при парсинге: {str(e)}')
-
-    return redirect(url_for('index'))
 
 
 @app.route('/skills/add', methods=['POST'])
@@ -467,117 +445,11 @@ def remove_skill(skill_id):
     return redirect(url_for('profile'))
 
 
-@app.route('/api/update-data', methods=['POST'])
-def api_update_data():
-    """API для обновления данных"""
-    try:
-        update_type = request.form.get('type', 'full')
-        categories = request.form.get('categories')
-        data_type = request.form.get('data_type', 'all')  # 'all', 'vacancies', 'courses'
-
-        # Импортируем функцию обновления
-        from update_data import update_data
-
-        # Преобразуем категории из JSON
-        cat_list = None
-        if categories:
-            import json
-            cat_list = json.loads(categories)
-
-        # Запускаем обновление в зависимости от типа данных
-        if data_type == 'vacancies':
-            # Обновление только вакансий
-            if update_type == 'quick':
-                update_data(quick=True, vacancies_only=True)
-            elif update_type == 'categories' and cat_list:
-                update_data(categories=cat_list, vacancies_only=True)
-            else:
-                update_data(quick=False, vacancies_only=True)
-
-        elif data_type == 'courses':
-            # Обновление только курсов
-            if update_type == 'quick':
-                update_data(quick=True, courses_only=True)
-            elif update_type == 'categories' and cat_list:
-                update_data(categories=cat_list, courses_only=True)
-            else:
-                update_data(quick=False, courses_only=True)
-
-        else:
-            # Обновление всего
-            if update_type == 'quick':
-                update_data(quick=True)
-            elif update_type == 'categories' and cat_list:
-                update_data(categories=cat_list)
-            else:
-                update_data(quick=False)
-
-        return jsonify({'status': 'success', 'message': 'Данные обновлены'})
-    except Exception as e:
-        print(f"Ошибка обновления: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@app.route('/api/data-status', methods=['GET'])
-def api_data_status():
-    """API для получения статуса данных"""
-    try:
-        from models import Vacancy, Course, Skill, User
-
-        vacancies = Vacancy.query.count()
-        courses = Course.query.count()
-        skills = Skill.query.count()
-        users = User.query.count()
-
-        # Размер базы данных (примерно)
-        import os
-        db_path = os.path.join('instance', 'job_course.db')
-        db_size = 0
-        if os.path.exists(db_path):
-            db_size = os.path.getsize(db_path) / (1024 * 1024)  # в MB
-
-        # Последнее обновление (можно сохранять в файл или БД)
-        last_update = None
-        update_file = 'last_update.txt'
-        if os.path.exists(update_file):
-            with open(update_file, 'r') as f:
-                last_update = f.read().strip()
-
-        return jsonify({
-            'vacancies': vacancies,
-            'courses': courses,
-            'skills': skills,
-            'users': users,
-            'database_size': round(db_size, 2),
-            'last_update': last_update
-        })
-    except Exception as e:
-        print(f"Ошибка получения статуса: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/update-status', methods=['POST'])
-def api_update_status():
-    """API для сохранения времени последнего обновления"""
-    try:
-        from datetime import datetime
-        update_file = 'last_update.txt'
-        with open(update_file, 'w') as f:
-            f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        return jsonify({'status': 'success'})
-    except:
-        return jsonify({'status': 'error'}), 500
-
-
-background_tasks = {}
-
 def run_update_task(task_id, update_type, data_type, categories=None):
     """Функция для выполнения обновления в фоновом потоке"""
     try:
         from update_data import update_data
-        
+
         # Обновляем статус задачи
         background_tasks[task_id] = {
             'status': 'running',
@@ -585,12 +457,12 @@ def run_update_task(task_id, update_type, data_type, categories=None):
             'message': 'Запуск обновления...',
             'start_time': datetime.now().isoformat()
         }
-        
+
         with app.app_context():
             # Обновляем прогресс
             background_tasks[task_id]['progress'] = 10
             background_tasks[task_id]['message'] = 'Инициализация парсеров...'
-            
+
             # Запускаем обновление в зависимости от типа
             if data_type == 'vacancies':
                 if update_type == 'quick':
@@ -602,7 +474,7 @@ def run_update_task(task_id, update_type, data_type, categories=None):
                 else:
                     background_tasks[task_id]['message'] = 'Полное обновление всех вакансий...'
                     update_data(quick=False, vacancies_only=True)
-            
+
             elif data_type == 'courses':
                 if update_type == 'quick':
                     background_tasks[task_id]['message'] = 'Быстрое обновление курсов (IT)...'
@@ -613,7 +485,7 @@ def run_update_task(task_id, update_type, data_type, categories=None):
                 else:
                     background_tasks[task_id]['message'] = 'Полное обновление всех курсов...'
                     update_data(quick=False, courses_only=True)
-            
+
             else:  # обновление всего
                 if update_type == 'quick':
                     background_tasks[task_id]['message'] = 'Быстрое обновление всех данных (IT)...'
@@ -624,18 +496,18 @@ def run_update_task(task_id, update_type, data_type, categories=None):
                 else:
                     background_tasks[task_id]['message'] = 'Полное обновление всех данных...'
                     update_data(quick=False)
-            
+
             # Обновляем прогресс до 90%
             background_tasks[task_id]['progress'] = 90
             background_tasks[task_id]['message'] = 'Сохранение результатов...'
             time.sleep(1)
-            
+
             # Завершаем задачу
             background_tasks[task_id]['status'] = 'completed'
             background_tasks[task_id]['progress'] = 100
             background_tasks[task_id]['message'] = 'Обновление успешно завершено!'
             background_tasks[task_id]['end_time'] = datetime.now().isoformat()
-            
+
     except Exception as e:
         # В случае ошибки
         background_tasks[task_id]['status'] = 'error'
@@ -655,16 +527,16 @@ def api_update_data_background():
         update_type = request.form.get('type', 'quick')
         data_type = request.form.get('data_type', 'all')
         categories = request.form.get('categories')
-        
+
         # Генерируем уникальный ID для задачи
         task_id = str(uuid.uuid4())
-        
+
         # Преобразуем категории из JSON если есть
         cat_list = None
         if categories:
             import json
             cat_list = json.loads(categories)
-        
+
         # Запускаем фоновый поток
         thread = threading.Thread(
             target=run_update_task,
@@ -672,14 +544,14 @@ def api_update_data_background():
         )
         thread.daemon = True  # Поток завершится при остановке приложения
         thread.start()
-        
+
         # Сразу возвращаем ID задачи
         return jsonify({
             'status': 'started',
             'task_id': task_id,
             'message': 'Обновление запущено в фоновом режиме'
         })
-        
+
     except Exception as e:
         print(f"Ошибка при запуске фоновой задачи: {e}")
         return jsonify({'error': str(e)}), 500
@@ -700,7 +572,7 @@ def api_cleanup_tasks():
     try:
         current_time = datetime.now()
         to_delete = []
-        
+
         for task_id, task in background_tasks.items():
             if task['status'] in ['completed', 'error']:
                 if 'end_time' in task:
@@ -708,12 +580,40 @@ def api_cleanup_tasks():
                     # Удаляем задачи старше 1 часа
                     if (current_time - end_time).total_seconds() > 3600:
                         to_delete.append(task_id)
-        
+
         for task_id in to_delete:
             del background_tasks[task_id]
-        
+
         return jsonify({'deleted': len(to_delete)})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/data-status', methods=['GET'])
+def api_data_status():
+    """API для получения статуса данных"""
+    try:
+        vacancies = Vacancy.query.count()
+        courses = Course.query.count()
+        skills = Skill.query.count()
+        users = User.query.count()
+
+        # Последнее обновление
+        last_update = None
+        update_file = 'last_update.txt'
+        if os.path.exists(update_file):
+            with open(update_file, 'r') as f:
+                last_update = f.read().strip()
+
+        return jsonify({
+            'vacancies': vacancies,
+            'courses': courses,
+            'skills': skills,
+            'users': users,
+            'last_update': last_update
+        })
+    except Exception as e:
+        print(f"Ошибка получения статуса: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -751,5 +651,5 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"❌ Ошибка при создании базы данных: {e}")
 
-    port = int(os.environ.get('PORT', 7860))
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
