@@ -5,6 +5,9 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from datetime import datetime
 import json
 import warnings
+import threading
+import time
+import uuid
 
 warnings.filterwarnings('ignore')
 
@@ -566,6 +569,152 @@ def api_update_status():
         return jsonify({'status': 'success'})
     except:
         return jsonify({'status': 'error'}), 500
+
+
+background_tasks = {}
+
+def run_update_task(task_id, update_type, data_type, categories=None):
+    """Функция для выполнения обновления в фоновом потоке"""
+    try:
+        from update_data import update_data
+        
+        # Обновляем статус задачи
+        background_tasks[task_id] = {
+            'status': 'running',
+            'progress': 0,
+            'message': 'Запуск обновления...',
+            'start_time': datetime.now().isoformat()
+        }
+        
+        with app.app_context():
+            # Обновляем прогресс
+            background_tasks[task_id]['progress'] = 10
+            background_tasks[task_id]['message'] = 'Инициализация парсеров...'
+            
+            # Запускаем обновление в зависимости от типа
+            if data_type == 'vacancies':
+                if update_type == 'quick':
+                    background_tasks[task_id]['message'] = 'Быстрое обновление вакансий (IT)...'
+                    update_data(quick=True, vacancies_only=True)
+                elif update_type == 'categories' and categories:
+                    background_tasks[task_id]['message'] = f'Обновление вакансий по категориям: {categories}...'
+                    update_data(categories=categories, vacancies_only=True)
+                else:
+                    background_tasks[task_id]['message'] = 'Полное обновление всех вакансий...'
+                    update_data(quick=False, vacancies_only=True)
+            
+            elif data_type == 'courses':
+                if update_type == 'quick':
+                    background_tasks[task_id]['message'] = 'Быстрое обновление курсов (IT)...'
+                    update_data(quick=True, courses_only=True)
+                elif update_type == 'categories' and categories:
+                    background_tasks[task_id]['message'] = f'Обновление курсов по категориям: {categories}...'
+                    update_data(categories=categories, courses_only=True)
+                else:
+                    background_tasks[task_id]['message'] = 'Полное обновление всех курсов...'
+                    update_data(quick=False, courses_only=True)
+            
+            else:  # обновление всего
+                if update_type == 'quick':
+                    background_tasks[task_id]['message'] = 'Быстрое обновление всех данных (IT)...'
+                    update_data(quick=True)
+                elif update_type == 'categories' and categories:
+                    background_tasks[task_id]['message'] = f'Обновление всех данных по категориям: {categories}...'
+                    update_data(categories=categories)
+                else:
+                    background_tasks[task_id]['message'] = 'Полное обновление всех данных...'
+                    update_data(quick=False)
+            
+            # Обновляем прогресс до 90%
+            background_tasks[task_id]['progress'] = 90
+            background_tasks[task_id]['message'] = 'Сохранение результатов...'
+            time.sleep(1)
+            
+            # Завершаем задачу
+            background_tasks[task_id]['status'] = 'completed'
+            background_tasks[task_id]['progress'] = 100
+            background_tasks[task_id]['message'] = 'Обновление успешно завершено!'
+            background_tasks[task_id]['end_time'] = datetime.now().isoformat()
+            
+    except Exception as e:
+        # В случае ошибки
+        background_tasks[task_id]['status'] = 'error'
+        background_tasks[task_id]['progress'] = 0
+        background_tasks[task_id]['message'] = f'Ошибка: {str(e)}'
+        background_tasks[task_id]['error'] = str(e)
+        background_tasks[task_id]['end_time'] = datetime.now().isoformat()
+        print(f"Ошибка в фоновой задаче {task_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+@app.route('/api/update-data-background', methods=['POST'])
+def api_update_data_background():
+    """Запускает обновление данных в фоновом потоке"""
+    try:
+        update_type = request.form.get('type', 'quick')
+        data_type = request.form.get('data_type', 'all')
+        categories = request.form.get('categories')
+        
+        # Генерируем уникальный ID для задачи
+        task_id = str(uuid.uuid4())
+        
+        # Преобразуем категории из JSON если есть
+        cat_list = None
+        if categories:
+            import json
+            cat_list = json.loads(categories)
+        
+        # Запускаем фоновый поток
+        thread = threading.Thread(
+            target=run_update_task,
+            args=(task_id, update_type, data_type, cat_list)
+        )
+        thread.daemon = True  # Поток завершится при остановке приложения
+        thread.start()
+        
+        # Сразу возвращаем ID задачи
+        return jsonify({
+            'status': 'started',
+            'task_id': task_id,
+            'message': 'Обновление запущено в фоновом режиме'
+        })
+        
+    except Exception as e:
+        print(f"Ошибка при запуске фоновой задачи: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/task-status/<task_id>', methods=['GET'])
+def api_task_status(task_id):
+    """Получение статуса фоновой задачи"""
+    if task_id in background_tasks:
+        return jsonify(background_tasks[task_id])
+    else:
+        return jsonify({'status': 'not_found', 'message': 'Задача не найдена'}), 404
+
+
+@app.route('/api/cleanup-tasks', methods=['POST'])
+def api_cleanup_tasks():
+    """Очистка завершенных задач старше 1 часа"""
+    try:
+        current_time = datetime.now()
+        to_delete = []
+        
+        for task_id, task in background_tasks.items():
+            if task['status'] in ['completed', 'error']:
+                if 'end_time' in task:
+                    end_time = datetime.fromisoformat(task['end_time'])
+                    # Удаляем задачи старше 1 часа
+                    if (current_time - end_time).total_seconds() > 3600:
+                        to_delete.append(task_id)
+        
+        for task_id in to_delete:
+            del background_tasks[task_id]
+        
+        return jsonify({'deleted': len(to_delete)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.errorhandler(404)
