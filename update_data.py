@@ -44,12 +44,18 @@ def save_vacancies_to_db(vacancies):
             else:
                 skipped += 1
         except Exception as e:
-            print(f"Ошибка сохранения: {e}")
+            print(f"Ошибка сохранения вакансии: {e}")
             continue
 
     if saved > 0:
-        db.session.commit()
-        print(f"   Сохранено: {saved}, пропущено: {skipped}")
+        try:
+            db.session.commit()
+            print(f"   Сохранено вакансий: {saved}, пропущено дубликатов: {skipped}")
+        except Exception as e:
+            print(f"Ошибка коммита вакансий: {e}")
+            db.session.rollback()
+    else:
+        print(f"   Новых вакансий не добавлено, пропущено дубликатов: {skipped}")
 
     return saved
 
@@ -83,12 +89,18 @@ def save_courses_to_db(courses):
             else:
                 skipped += 1
         except Exception as e:
-            print(f"Ошибка сохранения: {e}")
+            print(f"Ошибка сохранения курса: {e}")
             continue
 
     if saved > 0:
-        db.session.commit()
-        print(f"   Сохранено: {saved}, пропущено: {skipped}")
+        try:
+            db.session.commit()
+            print(f"   Сохранено курсов: {saved}, пропущено дубликатов: {skipped}")
+        except Exception as e:
+            print(f"Ошибка коммита курсов: {e}")
+            db.session.rollback()
+    else:
+        print(f"   Новых курсов не добавлено, пропущено дубликатов: {skipped}")
 
     return saved
 
@@ -206,15 +218,19 @@ def update_vacancies(scraper, quick=False, categories=None):
 
     for idx, query in enumerate(search_queries, 1):
         print(f"\n🔍 Поиск вакансий {idx}/{total_queries}: '{query}'")
-        vacancies = scraper.parse_all_sources(query, pages=1)
-        all_vacancies.extend(vacancies)
-        print(f"   Собрано: {len(vacancies)} вакансий")
+        try:
+            vacancies = scraper.parse_all_sources(query, pages=1)
+            all_vacancies.extend(vacancies)
+            print(f"   Собрано: {len(vacancies)} вакансий")
+        except Exception as e:
+            print(f"   Ошибка при парсинге '{query}': {e}")
         time.sleep(2)
 
     if all_vacancies:
         saved = save_vacancies_to_db(all_vacancies)
         print(f"\n✅ Сохранено вакансий: {saved}")
         return saved
+    print("\n⚠️ Новых вакансий не найдено")
     return 0
 
 
@@ -268,15 +284,19 @@ def update_courses(scraper, quick=False, categories=None):
 
     for idx, query in enumerate(course_queries, 1):
         print(f"\n🔍 Поиск курсов {idx}/{total_queries}: '{query}'")
-        courses = scraper.parse_all_sources(query, pages=1)
-        all_courses.extend(courses)
-        print(f"   Собрано: {len(courses)} курсов")
+        try:
+            courses = scraper.parse_all_sources(query, pages=1)
+            all_courses.extend(courses)
+            print(f"   Собрано: {len(courses)} курсов")
+        except Exception as e:
+            print(f"   Ошибка при парсинге '{query}': {e}")
         time.sleep(2)
 
     if all_courses:
         saved = save_courses_to_db(all_courses)
         print(f"\n✅ Сохранено курсов: {saved}")
         return saved
+    print("\n⚠️ Новых курсов не найдено")
     return 0
 
 
@@ -293,11 +313,17 @@ def update_data(quick=False, categories=None, vacancies_only=False, courses_only
 
         # Обновление вакансий
         if not courses_only:
-            update_vacancies(job_scraper, quick, categories)
+            try:
+                update_vacancies(job_scraper, quick, categories)
+            except Exception as e:
+                print(f"Ошибка при обновлении вакансий: {e}")
 
         # Обновление курсов
         if not vacancies_only:
-            update_courses(course_scraper, quick, categories)
+            try:
+                update_courses(course_scraper, quick, categories)
+            except Exception as e:
+                print(f"Ошибка при обновлении курсов: {e}")
 
         # Сохраняем время последнего обновления
         try:
