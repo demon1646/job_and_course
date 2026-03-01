@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.title }} - {{ course.provider }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Главная</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('search') }}">Поиск</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ course.title }}</li>
+            </ol>
+        </nav>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="bi bi-book-fill"></i> {{ course.title }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5 class="text-muted">Провайдер</h5>
+                        <p class="h4">{{ course.provider }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="text-muted">Рейтинг</h5>
+                        <p class="h4">
+                            {% if course.rating %}
+                            <span class="rating">
+                                {% for i in range(5) %}
+                                    {% if i < course.rating|int %}
+                                        <i class="bi bi-star-fill"></i>
+                                    {% elif i < course.rating|round(0, 'ceil') and course.rating % 1 >= 0.5 %}
+                                        <i class="bi bi-star-half"></i>
+                                    {% else %}
+                                        <i class="bi bi-star"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </span>
+                            {{ "%.1f"|format(course.rating) }}
+                            {% else %}
+                            Нет оценок
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-clock-fill text-primary me-2"></i>
+                            <div>
+                                <small class="text-muted d-block">Длительность</small>
+                                <strong>{{ course.duration or 'Не указана' }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-bar-chart-fill text-primary me-2"></i>
+                            <div>
+                                <small class="text-muted d-block">Уровень</small>
+                                <strong>
+                                    {% if course.level == 'beginner' %}
+                                        Начальный
+                                    {% elif course.level == 'intermediate' %}
+                                        Средний
+                                    {% elif course.level == 'advanced' %}
+                                        Продвинутый
+                                    {% else %}
+                                        {{ course.level or 'Не указан' }}
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-people-fill text-primary me-2"></i>
+                            <div>
+                                <small class="text-muted d-block">Студентов</small>
+                                <strong>{{ course.students_count or 'Не указано' }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if course.price is not none %}
+                <div class="alert alert-success mb-4">
+                    <i class="bi bi-cash"></i>
+                    <strong>Цена:</strong>
+                    {% if course.price == 0 %}
+                        Бесплатно
+                    {% else %}
+                        {{ course.price }} {{ course.price_currency }}
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="mb-4">
+                    <h5 class="text-muted">Описание курса</h5>
+                    <div class="course-description">
+                        {% if course.description %}
+                            {{ course.description | safe }}
+                        {% else %}
+                            <p class="text-muted">Описание отсутствует</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="text-muted">Навыки, которые вы получите</h5>
+                    <div class="d-flex flex-wrap">
+                        {% for skill in course.skills %}
+                        <a href="{{ url_for('search') }}?type=course&skills={{ skill.name }}" class="skill-tag">
+                            <i class="bi bi-tag-fill"></i> {{ skill.name }}
+                        </a>
+                        {% else %}
+                        <p class="text-muted">Навыки не указаны</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if course.url and course.url != '#' %}
+                <div class="text-center mt-4">
+                    <a href="{{ course.url }}" target="_blank" class="btn btn-primary btn-lg">
+                        <i class="bi bi-box-arrow-up-right"></i> Перейти к курсу
+                    </a>
+                </div>
+                {% endif %}
+
+                <div class="mt-3 text-muted small">
+                    <i class="bi bi-database"></i> Источник: {{ course.source or 'База данных' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        {% if current_user.is_authenticated %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> Для вашего профиля</h5>
+            </div>
+            <div class="card-body">
+                {% set user_skills = current_user.get_skills_list() %}
+                {% set course_skills = course.get_skills_list() %}
+                {% set new_skills = [] %}
+
+                {% for skill in course_skills %}
+                    {% if skill not in user_skills %}
+                        {% set new_skills = new_skills.append(skill) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if new_skills %}
+                <h6>Новые навыки, которые вы изучите:</h6>
+                <div class="d-flex flex-wrap mb-3">
+                    {% for skill in new_skills %}
+                    <span class="badge bg-info me-1 mb-1 p-2">{{ skill }}</span>
+                    {% endfor %}
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    Этот курс добавит {{ new_skills|length }} новых навыков в ваш профиль
+                </div>
+                {% else %}
+                <p class="text-muted">Вы уже владеете всеми навыками из этого курса</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if similar %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-files"></i> Похожие курсы</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for sim_course in similar %}
+                    <a href="{{ url_for('course_detail', course_id=sim_course.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ sim_course.title }}</h6>
+                            <small>{{ sim_course.provider }}</small>
+                        </div>
+                        <p class="mb-1 small">Уровень: {{ sim_course.level }}</p>
+                        <small class="rating">
+                            {% if sim_course.rating %}
+                                ★ {{ "%.1f"|format(sim_course.rating) }}
+                            {% endif %}
+                        </small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-briefcase"></i> Подходящие вакансии</h5>
+            </div>
+            <div class="card-body">
+                {% set related_vacancies = [] %}
+                {% for skill in course.skills %}
+                    {% for vacancy in skill.vacancies %}
+                        {% if vacancy not in related_vacancies %}
+                            {% set related_vacancies = related_vacancies.append(vacancy) %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+
+                {% if related_vacancies %}
+                <div class="list-group">
+                    {% for vacancy in related_vacancies[:3] %}
+                    <a href="{{ url_for('vacancy_detail', vacancy_id=vacancy.id) }}" class="list-group-item list-group-item-action">
+                        <h6 class="mb-1">{{ vacancy.title }}</h6>
+                        <p class="mb-1 small">{{ vacancy.company }} - {{ vacancy.location }}</p>
+                        <small class="text-success">{{ vacancy.get_salary_display() }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">Нет связанных вакансий</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

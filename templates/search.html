@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}Поиск вакансий и курсов{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-funnel-fill"></i> Фильтры</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('search') }}" id="filter-form">
+                    <input type="hidden" name="q" value="{{ query }}">
+
+                    <div class="filter-section mb-3">
+                        <label class="filter-title fw-bold">Тип</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="type" id="type-vacancy" value="vacancy"
+                                   {% if content_type == 'vacancy' %}checked{% endif %} autocomplete="off">
+                            <label class="btn btn-outline-primary" for="type-vacancy">
+                                <i class="bi bi-briefcase"></i> Вакансии
+                            </label>
+
+                            <input type="radio" class="btn-check" name="type" id="type-course" value="course"
+                                   {% if content_type == 'course' %}checked{% endif %} autocomplete="off">
+                            <label class="btn btn-outline-primary" for="type-course">
+                                <i class="bi bi-book"></i> Курсы
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="vacancy-filters" style="display: {% if content_type == 'vacancy' %}block{% else %}none{% endif %};">
+                        <div class="filter-section mb-3">
+                            <label class="filter-title fw-bold">Локация</label>
+                            <input type="text" class="form-control" name="location"
+                                   value="{{ request.args.get('location', '') }}" placeholder="Город или регион">
+                        </div>
+
+                        <div class="filter-section mb-3">
+                            <label class="filter-title fw-bold">Зарплата от</label>
+                            <input type="number" class="form-control" name="salary_min"
+                                   value="{{ request.args.get('salary_min', '') }}" placeholder="Например: 100000">
+                        </div>
+
+                        <div class="filter-section mb-3">
+                            <label class="filter-title fw-bold">Тип занятости</label>
+                            <select class="form-select" name="employment_type">
+                                <option value="">Любой</option>
+                                <option value="full-time" {% if request.args.get('employment_type') == 'full-time' %}selected{% endif %}>Полная занятость</option>
+                                <option value="part-time" {% if request.args.get('employment_type') == 'part-time' %}selected{% endif %}>Частичная занятость</option>
+                                <option value="remote" {% if request.args.get('employment_type') == 'remote' %}selected{% endif %}>Удаленная работа</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="course-filters" style="display: {% if content_type == 'course' %}block{% else %}none{% endif %};">
+                        <div class="filter-section mb-3">
+                            <label class="filter-title fw-bold">Уровень</label>
+                            <select class="form-select" name="level">
+                                <option value="">Любой</option>
+                                <option value="beginner" {% if request.args.get('level') == 'beginner' %}selected{% endif %}>Начальный</option>
+                                <option value="intermediate" {% if request.args.get('level') == 'intermediate' %}selected{% endif %}>Средний</option>
+                                <option value="advanced" {% if request.args.get('level') == 'advanced' %}selected{% endif %}>Продвинутый</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-section mb-3">
+                            <label class="filter-title fw-bold">Цена до</label>
+                            <input type="number" class="form-control" name="price_max"
+                                   value="{{ request.args.get('price_max', '') }}" placeholder="Максимальная цена">
+                        </div>
+                    </div>
+
+                    <div class="filter-section mb-3">
+                        <label class="filter-title fw-bold">Навыки</label>
+                        <div class="skills-filter">
+                            {% for skill in skills %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="skills"
+                                       value="{{ skill.name }}" id="skill-{{ skill.id }}"
+                                       {% if skill.name in request.args.getlist('skills') %}checked{% endif %}>
+                                <label class="form-check-label" for="skill-{{ skill.id }}">
+                                    {{ skill.name }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Применить фильтры
+                        </button>
+
+                        <a href="{{ url_for('search') }}?q={{ query }}&type={{ content_type }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-repeat"></i> Сбросить фильтры
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if current_user.is_authenticated and history and history.searches %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Недавние поиски</h5>
+            </div>
+            <div class="card-body p-2">
+                <div class="list-group list-group-flush">
+                    {% for search in history.searches[:5] %}
+                    <a href="{{ url_for('search') }}?q={{ search.query }}&type={{ search.content_type }}"
+                       class="list-group-item list-group-item-action p-2">
+                        <div class="d-flex w-100 justify-content-between">
+                            <span class="small">{{ search.query or 'Без запроса' }}</span>
+                            <small class="text-muted">{{ search.created_at.strftime('%H:%M') if search.created_at else '' }}</small>
+                        </div>
+                        <small class="text-muted">
+                            {% if search.content_type == 'vacancy' %}
+                                <i class="bi bi-briefcase"></i> Вакансии
+                            {% else %}
+                                <i class="bi bi-book"></i> Курсы
+                            {% endif %}
+                        </small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="bi bi-search-heart-fill"></i>
+                    Результаты поиска
+                </h4>
+                <span class="badge bg-primary">
+                    {% if content_type == 'vacancy' %}
+                        {{ results.total }} вакансий
+                    {% else %}
+                        {{ results.total }} курсов
+                    {% endif %}
+                </span>
+            </div>
+            <div class="card-body" id="results-container">
+                {% if results.items %}
+                    <div class="list-group">
+                        {% if content_type == 'vacancy' %}
+                            {% for vacancy in results.items %}
+                            <a href="{{ url_for('vacancy_detail', vacancy_id=vacancy.id) }}" class="list-group-item list-group-item-action">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-1">{{ vacancy.title }}</h5>
+                                        <p class="mb-1">
+                                            <i class="bi bi-building"></i> {{ vacancy.company }}
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-geo-alt"></i> {{ vacancy.location or 'Не указано' }}
+                                        </p>
+                                        <p class="mb-1">
+                                            {% for skill in vacancy.skills[:3] %}
+                                            <span class="badge bg-primary me-1">{{ skill.name }}</span>
+                                            {% endfor %}
+                                            {% if vacancy.skills|length > 3 %}
+                                            <span class="badge bg-secondary">+{{ vacancy.skills|length - 3 }}</span>
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4 text-md-end">
+                                        <div class="salary">{{ vacancy.get_salary_display() }}</div>
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i>
+                                            {{ vacancy.posted_date.strftime('%d.%m.%Y') if vacancy.posted_date else 'Недавно' }}
+                                        </small>
+                                        <br>
+                                        <small class="text-muted">
+                                            <i class="bi bi-database"></i> {{ vacancy.source }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        {% else %}
+                            {% for course in results.items %}
+                            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="list-group-item list-group-item-action">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-1">{{ course.title }}</h5>
+                                        <p class="mb-1">
+                                            <i class="bi bi-building"></i> {{ course.provider }}
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-bar-chart"></i>
+                                            {% if course.level == 'beginner' %}
+                                                Начальный
+                                            {% elif course.level == 'intermediate' %}
+                                                Средний
+                                            {% elif course.level == 'advanced' %}
+                                                Продвинутый
+                                            {% else %}
+                                                {{ course.level or 'Не указан' }}
+                                            {% endif %}
+                                        </p>
+                                        <p class="mb-1">
+                                            {% for skill in course.skills[:3] %}
+                                            <span class="badge bg-primary me-1">{{ skill.name }}</span>
+                                            {% endfor %}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4 text-md-end">
+                                        <div class="rating">
+                                            {% if course.rating %}
+                                                ★ {{ "%.1f"|format(course.rating) }}
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            {% if course.price == 0 %}
+                                                <span class="badge bg-success">Бесплатно</span>
+                                            {% elif course.price %}
+                                                {{ course.price }} {{ course.price_currency }}
+                                            {% endif %}
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="bi bi-people"></i> {{ course.students_count or 0 }} студентов
+                                        </small>
+                                        <br>
+                                        <small class="text-muted">
+                                            <i class="bi bi-database"></i> {{ course.source }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    {% if results.pages > 1 %}
+                    <nav aria-label="Page navigation" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if results.has_prev %}
+                            <li class="page-item">
+                                {% set prev_args = request.args.copy().to_dict() %}
+                                {% set _ = prev_args.update({'page': results.prev_num}) %}
+                                <a class="page-link" href="{{ url_for('search', **prev_args) }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;</span>
+                            </li>
+                            {% endif %}
+
+                            {% set range_start = [1, results.page - 2]|max %}
+                            {% set range_end = [results.pages, results.page + 2]|min %}
+
+                            {% if range_start > 1 %}
+                            <li class="page-item">
+                                {% set first_args = request.args.copy().to_dict() %}
+                                {% set _ = first_args.update({'page': 1}) %}
+                                <a class="page-link" href="{{ url_for('search', **first_args) }}">1</a>
+                            </li>
+                            {% if range_start > 2 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% endif %}
+                            {% endif %}
+
+                            {% for page_num in range(range_start, range_end + 1) %}
+                                {% if page_num == results.page %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_num }}</span>
+                                </li>
+                                {% else %}
+                                <li class="page-item">
+                                    {% set page_args = request.args.copy().to_dict() %}
+                                    {% set _ = page_args.update({'page': page_num}) %}
+                                    <a class="page-link" href="{{ url_for('search', **page_args) }}">{{ page_num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if range_end < results.pages %}
+                            {% if range_end < results.pages - 1 %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                            {% endif %}
+                            <li class="page-item">
+                                {% set last_args = request.args.copy().to_dict() %}
+                                {% set _ = last_args.update({'page': results.pages}) %}
+                                <a class="page-link" href="{{ url_for('search', **last_args) }}">{{ results.pages }}</a>
+                            </li>
+                            {% endif %}
+
+                            {% if results.has_next %}
+                            <li class="page-item">
+                                {% set next_args = request.args.copy().to_dict() %}
+                                {% set _ = next_args.update({'page': results.next_num}) %}
+                                <a class="page-link" href="{{ url_for('search', **next_args) }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+
+                    <div class="text-center text-muted small mt-2">
+                        {% if results.total > 0 %}
+                            Показаны {% if content_type == 'vacancy' %}вакансии{% else %}курсы{% endif %}
+                            {{ (results.page - 1) * results.per_page + 1 }} -
+                            {% if results.page * results.per_page <= results.total %}
+                                {{ results.page * results.per_page }}
+                            {% else %}
+                                {{ results.total }}
+                            {% endif %}
+                            из {{ results.total }}
+                            (страница {{ results.page }} из {{ results.pages }})
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-emoji-frown" style="font-size: 4rem; color: var(--gray-text);"></i>
+                        <h4 class="mt-3">Ничего не найдено</h4>
+                        <p class="text-muted">Попробуйте изменить параметры поиска или фильтры</p>
+                        <a href="{{ url_for('search') }}?q={{ query }}&type={{ content_type }}" class="btn btn-primary">
+                            <i class="bi bi-arrow-repeat"></i> Сбросить фильтры
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('input[name="type"]').change(function() {
+        if ($(this).val() === 'vacancy') {
+            $('#vacancy-filters').slideDown();
+            $('#course-filters').slideUp();
+        } else {
+            $('#vacancy-filters').slideUp();
+            $('#course-filters').slideDown();
+        }
+    });
+
+    let timeout;
+    $('select[name="employment_type"], select[name="level"], input[name="skills"]').change(function() {
+        $('#filter-form').submit();
+    });
+
+    $('input[name="location"], input[name="salary_min"], input[name="price_max"]').on('input', function() {
+        clearTimeout(timeout);
+        timeout = setTimeout(function() {
+            $('#filter-form').submit();
+        }, 1000);
+    });
+
+    $('.form-check-input:checked').each(function() {
+        $(this).closest('.form-check').addClass('bg-light');
+    });
+
+    $('.form-check-input').change(function() {
+        if ($(this).is(':checked')) {
+            $(this).closest('.form-check').addClass('bg-light');
+        } else {
+            $(this).closest('.form-check').removeClass('bg-light');
+        }
+
+        $(this).closest('.form-check').addClass('pulse');
+        setTimeout(() => {
+            $(this).closest('.form-check').removeClass('pulse');
+        }, 300);
+    });
+
+    $('.page-link').click(function(e) {
+        if (!$(this).parent().hasClass('disabled')) {
+            $('html, body').animate({
+                scrollTop: $('#results-container').offset().top - 100
+            }, 300);
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+# Виртуальное окружение
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyo
+*.pyc
+
+# База данных
+instance/
+*.db
+*.db-journal
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Логи
+logs/
+*.log
+
+# Конфиденциальные данные
+.env
+*.env

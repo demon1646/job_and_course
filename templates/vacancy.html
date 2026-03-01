@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}{{ vacancy.title }} - {{ vacancy.company }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Главная</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('search') }}">Поиск</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ vacancy.title }}</li>
+            </ol>
+        </nav>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="bi bi-briefcase-fill"></i> {{ vacancy.title }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h5 class="text-muted">Компания</h5>
+                        <p class="h4">{{ vacancy.company }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="text-muted">Зарплата</h5>
+                        <p class="h4 text-success">{{ vacancy.get_salary_display() }}</p>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+                            <div>
+                                <small class="text-muted d-block">Локация</small>
+                                <strong>{{ vacancy.location or 'Не указана' }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-briefcase-fill text-primary me-2"></i>
+                            <div>
+                                <small class="text-muted d-block">Тип занятости</small>
+                                <strong>
+                                    {% if vacancy.employment_type == 'full-time' %}
+                                        Полная занятость
+                                    {% elif vacancy.employment_type == 'part-time' %}
+                                        Частичная занятость
+                                    {% elif vacancy.employment_type == 'remote' %}
+                                        Удаленная работа
+                                    {% else %}
+                                        {{ vacancy.employment_type or 'Не указан' }}
+                                    {% endif %}
+                                </strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-calendar-event-fill text-primary me-2"></i>
+                            <div>
+                                <small class="text-muted d-block">Опубликовано</small>
+                                <strong>{{ vacancy.posted_date.strftime('%d.%m.%Y') if vacancy.posted_date else 'Недавно' }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h5 class="text-muted">Описание вакансии</h5>
+                    <div class="vacancy-description">
+                        {% if vacancy.description %}
+                            {{ vacancy.description | safe }}
+                        {% else %}
+                            <p class="text-muted">Описание отсутствует</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if vacancy.requirements %}
+                <div class="mb-4">
+                    <h5 class="text-muted">Требования</h5>
+                    <div class="vacancy-description">
+                        {{ vacancy.requirements | safe }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="mb-4">
+                    <h5 class="text-muted">Требуемые навыки</h5>
+                    <div class="d-flex flex-wrap">
+                        {% for skill in vacancy.skills %}
+                        <a href="{{ url_for('search') }}?skills={{ skill.name }}" class="skill-tag">
+                            <i class="bi bi-tag-fill"></i> {{ skill.name }}
+                        </a>
+                        {% else %}
+                        <p class="text-muted">Навыки не указаны</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if vacancy.experience_required %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <strong>Требуемый опыт:</strong> {{ vacancy.experience_required }}
+                </div>
+                {% endif %}
+
+                {% if vacancy.url and vacancy.url != '#' %}
+                <div class="text-center mt-4">
+                    <a href="{{ vacancy.url }}" target="_blank" class="btn btn-primary btn-lg">
+                        <i class="bi bi-box-arrow-up-right"></i> Перейти к оригиналу вакансии
+                    </a>
+                </div>
+                {% endif %}
+
+                <div class="mt-3 text-muted small">
+                    <i class="bi bi-database"></i> Источник: {{ vacancy.source or 'База данных' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        {% if current_user.is_authenticated %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-star-fill"></i> Ваши шансы</h5>
+            </div>
+            <div class="card-body">
+                {% set user_skills = current_user.get_skills_list() %}
+                {% set vacancy_skills = vacancy.get_skills_list() %}
+                {% set matching_skills = [] %}
+
+                {% for skill in vacancy_skills %}
+                    {% if skill in user_skills %}
+                        {% set matching_skills = matching_skills.append(skill) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if matching_skills %}
+                <div class="text-center mb-3">
+                    <div class="display-4 text-success">{{ (matching_skills|length / vacancy_skills|length * 100)|int }}%</div>
+                    <p>совпадение навыков</p>
+                </div>
+
+                <h6>Ваши навыки, подходящие под вакансию:</h6>
+                <div class="d-flex flex-wrap mb-3">
+                    {% for skill in matching_skills %}
+                    <span class="badge bg-success me-1 mb-1 p-2">{{ skill }}</span>
+                    {% endfor %}
+                </div>
+
+                {% set missing_skills = [] %}
+                {% for skill in vacancy_skills %}
+                    {% if skill not in user_skills %}
+                        {% set missing_skills = missing_skills.append(skill) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% if missing_skills %}
+                <h6>Недостающие навыки:</h6>
+                <div class="d-flex flex-wrap mb-3">
+                    {% for skill in missing_skills %}
+                    <span class="badge bg-warning text-dark me-1 mb-1 p-2">{{ skill }}</span>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('search') }}?type=course&skills={% for skill in missing_skills %}{{ skill }}{% if not loop.last %},{% endif %}{% endfor %}"
+                   class="btn btn-outline-primary btn-sm w-100">
+                    <i class="bi bi-book"></i> Найти курсы для изучения
+                </a>
+                {% endif %}
+
+                {% else %}
+                <p class="text-muted">Добавьте навыки в профиль, чтобы узнать свои шансы</p>
+                <a href="{{ url_for('profile') }}" class="btn btn-outline-primary btn-sm">Перейти к профилю</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if similar %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-files"></i> Похожие вакансии</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for sim_vac in similar %}
+                    <a href="{{ url_for('vacancy_detail', vacancy_id=sim_vac.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ sim_vac.title }}</h6>
+                            <small>{{ sim_vac.company }}</small>
+                        </div>
+                        <p class="mb-1 small">{{ sim_vac.location }}</p>
+                        <small class="text-success">{{ sim_vac.get_salary_display() }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-share"></i> Поделиться</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-around">
+                    <a href="#" class="text-primary" onclick="window.open('https://vk.com/share.php?url=' + encodeURIComponent(window.location.href), '_blank')">
+                        <i class="bi bi-vk" style="font-size: 2rem;"></i>
+                    </a>
+                    <a href="#" class="text-info" onclick="window.open('https://t.me/share/url?url=' + encodeURIComponent(window.location.href), '_blank')">
+                        <i class="bi bi-telegram" style="font-size: 2rem;"></i>
+                    </a>
+                    <a href="#" class="text-success" onclick="window.open('https://wa.me/?text=' + encodeURIComponent(window.location.href), '_blank')">
+                        <i class="bi bi-whatsapp" style="font-size: 2rem;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

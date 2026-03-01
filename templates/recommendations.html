@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Персональные рекомендации{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5">
+            <i class="bi bi-star-fill text-warning"></i>
+            Персональные рекомендации
+        </h1>
+        <p class="lead">Подборки на основе вашего профиля, навыков и истории просмотров</p>
+    </div>
+</div>
+
+{% if analysis %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card bg-light">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-pie-chart-fill"></i> Аналитика вашего профиля</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <div class="display-4">{{ analysis.total_skills }}</div>
+                        <div class="text-muted">Всего навыков</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="display-4">{{ analysis.experience_years or 0 }}</div>
+                        <div class="text-muted">Лет опыта</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="display-4">{{ analysis.skill_gaps|length }}</div>
+                        <div class="text-muted">Рекомендуемых навыков</div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="display-4">{{ analysis.recommended_career_path|length }}</div>
+                        <div class="text-muted">Карьерных путей</div>
+                    </div>
+                </div>
+
+                {% if analysis.skill_gaps %}
+                <hr>
+                <h6>Рекомендуемые для изучения навыки:</h6>
+                <div class="mb-3">
+                    {% for skill in analysis.skill_gaps %}
+                    <span class="badge bg-warning text-dark p-2 me-1">{{ skill }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if analysis.recommended_career_path %}
+                <h6>Возможные карьерные пути:</h6>
+                <ul>
+                    {% for path in analysis.recommended_career_path %}
+                    <li>{{ path }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-briefcase-fill"></i>
+                    Рекомендуемые вакансии
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="recommendations-list" id="vacancy-recommendations">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-book-fill"></i>
+                    Рекомендуемые курсы
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="recommendations-list" id="course-recommendations">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Загрузка...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if history.views %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-clock-history"></i>
+                    На основе вашей истории
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% set viewed_items = [] %}
+                    {% for view in history.views[:5] %}
+                        {% if view.content_type == 'vacancy' %}
+                            {% set item = Vacancy.query.get(view.content_id) %}
+                            {% if item %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title">{{ item.title }}</h6>
+                                            <p class="card-text small">{{ item.company }}</p>
+                                            <a href="{{ url_for('vacancy_detail', vacancy_id=item.id) }}"
+                                               class="btn btn-sm btn-outline-primary">Посмотреть</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning">
+                <h4 class="mb-0">
+                    <i class="bi bi-fire"></i>
+                    Популярное сейчас
+                </h4>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="popularTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="popular-vacancies-tab" data-bs-toggle="tab"
+                                data-bs-target="#popular-vacancies" type="button">
+                            <i class="bi bi-briefcase"></i> Популярные вакансии
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="popular-courses-tab" data-bs-toggle="tab"
+                                data-bs-target="#popular-courses" type="button">
+                            <i class="bi bi-book"></i> Популярные курсы
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3" id="popularTabContent">
+                    <div class="tab-pane fade show active" id="popular-vacancies" role="tabpanel">
+                        <div class="row">
+                            {% for vacancy in popular_vacancies %}
+                            <div class="col-md-6 mb-2">
+                                <a href="{{ url_for('vacancy_detail', vacancy_id=vacancy.id) }}"
+                                   class="text-decoration-none">
+                                    <div class="card">
+                                        <div class="card-body py-2">
+                                            <h6>{{ vacancy.title }}</h6>
+                                            <small class="text-muted">{{ vacancy.company }} • {{ vacancy.location }}</small>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="popular-courses" role="tabpanel">
+                        <div class="row">
+                            {% for course in popular_courses %}
+                            <div class="col-md-6 mb-2">
+                                <a href="{{ url_for('course_detail', course_id=course.id) }}"
+                                   class="text-decoration-none">
+                                    <div class="card">
+                                        <div class="card-body py-2">
+                                            <h6>{{ course.title }}</h6>
+                                            <small class="text-muted">{{ course.provider }} {{ course.rating }}</small>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $.ajax({
+        url: '/api/recommendations',
+        method: 'GET',
+        data: { type: 'vacancy', limit: 5 },
+        success: function(data) {
+            displayRecommendations(data, 'vacancy');
+        }
+    });
+
+    $.ajax({
+        url: '/api/recommendations',
+        method: 'GET',
+        data: { type: 'course', limit: 5 },
+        success: function(data) {
+            displayRecommendations(data, 'course');
+        }
+    });
+});
+
+function displayRecommendations(items, type) {
+    let container = type === 'vacancy' ? '#vacancy-recommendations' : '#course-recommendations';
+
+    if (items.length === 0) {
+        $(container).html(`
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                Пока нет рекомендаций. Добавьте больше навыков в профиль!
+            </div>
+        `);
+        return;
+    }
+
+    let html = '<div class="list-group">';
+
+    items.forEach(function(item) {
+        if (type === 'vacancy') {
+            html += `
+                <a href="/vacancy/${item.id}" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${item.title}</h6>
+                        <small>${item.company || ''}</small>
+                    </div>
+                    <p class="mb-1">${item.location || ''}</p>
+                    <small class="text-success">${item.salary || ''}</small>
+                </a>
+            `;
+        } else {
+            html += `
+                <a href="/course/${item.id}" class="list-group-item list-group-item-action">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${item.title}</h6>
+                        <small>${item.provider || ''}</small>
+                    </div>
+                    <p class="mb-1">★ ${item.rating || 'Нет оценок'}</p>
+                    <small>${item.price ? item.price + ' руб.' : 'Бесплатно'}</small>
+                </a>
+            `;
+        }
+    });
+
+    html += '</div>';
+    $(container).html(html);
+}
+</script>
+{% endblock %}

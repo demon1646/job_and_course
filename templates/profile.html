@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <!-- Кнопки управления данными -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Управление данными</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#quickUpdateModal">
+                        <i class="bi bi-lightning"></i> Быстрое обновление (IT)
+                    </button>
+                    <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#updateDataModal">
+                        <i class="bi bi-cloud-download"></i> Полное обновление
+                    </button>
+                    <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#categoryUpdateModal">
+                        <i class="bi bi-tags"></i> По категориям
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="showDataStatus()">
+                        <i class="bi bi-info-circle"></i> Статус данных
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Карточка профиля -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-person-circle"></i> Профиль пользователя</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Имя пользователя</label>
+                        <input type="text" class="form-control" value="{{ user.username }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" value="{{ user.email }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Полное имя</label>
+                        <input type="text" class="form-control" name="full_name" value="{{ user.full_name or '' }}" placeholder="Введите ваше полное имя">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Локация</label>
+                        <input type="text" class="form-control" name="location" value="{{ user.location or '' }}" placeholder="Город, страна">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Желаемая позиция</label>
+                        <input type="text" class="form-control" name="desired_position" value="{{ user.desired_position or '' }}" placeholder="Например: Python Developer">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Минимальная зарплата</label>
+                        <input type="number" class="form-control" name="min_salary" value="{{ user.min_salary or '' }}" placeholder="Например: 150000">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Опыт работы (лет)</label>
+                        <input type="number" class="form-control" name="experience_years" value="{{ user.experience_years or '' }}" placeholder="Например: 3">
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Сохранить изменения</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Карточка навыков -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-stars"></i> Мои навыки</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    {% if user.skills %}
+                        {% for skill in user.skills %}
+                        <span class="skill-tag" data-skill-id="{{ skill.id }}">
+                            {{ skill.name }}
+                            <i class="bi bi-x-circle-fill ms-1 text-danger" style="cursor: pointer;" onclick="removeSkill({{ skill.id }})"></i>
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">У вас пока нет навыков. Добавьте навыки, чтобы получать рекомендации.</p>
+                    {% endif %}
+                </div>
+
+                <form action="{{ url_for('add_skill') }}" method="POST" class="mt-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" name="skill_name" placeholder="Новый навык" required list="skillSuggestions">
+                        <datalist id="skillSuggestions">
+                            {% for skill in all_skills %}
+                            <option value="{{ skill.name }}">
+                            {% endfor %}
+                        </datalist>
+                        <button class="btn btn-outline-success" type="submit">Добавить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <!-- Анализ профиля -->
+        {% if analysis %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-graph-up"></i> Анализ профиля</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="profile-stats mb-3">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="stat-value">{{ analysis.total_skills }}</div>
+                                    <div class="stat-label">Всего навыков</div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stat-value">{{ analysis.experience_years or 0 }}</div>
+                                    <div class="stat-label">Лет опыта</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h5 class="mt-4">Топ навыков</h5>
+                        <div class="mb-3">
+                            {% if analysis.top_skills %}
+                                {% for skill in analysis.top_skills %}
+                                <span class="badge bg-primary me-1 mb-1 p-2">{{ skill }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">Нет данных</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        {% if analysis.skill_gaps and analysis.skill_gaps|length > 0 %}
+                        <h5 class="text-warning">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            Рекомендуемые навыки ({{ analysis.skill_gaps|length }})
+                        </h5>
+                        <div class="mb-3">
+                            {% for skill in analysis.skill_gaps[:10] %}
+                            <span class="badge bg-warning text-dark me-1 mb-1 p-2">{{ skill }}</span>
+                            {% endfor %}
+                            {% if analysis.skill_gaps|length > 10 %}
+                            <span class="badge bg-secondary">+{{ analysis.skill_gaps|length - 10 }}</span>
+                            {% endif %}
+                        </div>
+                        <p class="text-muted small">Изучите эти навыки, чтобы повысить свои шансы</p>
+                        {% endif %}
+
+                        {% if analysis.recommended_career_path and analysis.recommended_career_path|length > 0 %}
+                        <h5 class="mt-3">
+                            <i class="bi bi-compass-fill text-info"></i>
+                            Карьерный путь
+                        </h5>
+                        <ul class="list-unstyled">
+                            {% for path in analysis.recommended_career_path %}
+                            <li><i class="bi bi-arrow-right-circle-fill text-primary me-2"></i>{{ path }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Персональные рекомендации -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-star-fill text-warning"></i> Персональные рекомендации</h4>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="recommendationsTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="vacancies-tab" data-bs-toggle="tab" data-bs-target="#vacancies" type="button">
+                            <i class="bi bi-briefcase"></i> Вакансии
+                            <span class="badge bg-primary ms-1">{{ recommended_vacancies|length }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="courses-tab" data-bs-toggle="tab" data-bs-target="#courses" type="button">
+                            <i class="bi bi-book"></i> Курсы
+                            <span class="badge bg-primary ms-1">{{ recommended_courses|length }}</span>
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3" id="recommendationsTabContent">
+                    <div class="tab-pane fade show active" id="vacancies" role="tabpanel">
+                        <div id="vacancy-recommendations">
+                            {% if recommended_vacancies %}
+                                <div class="list-group">
+                                    {% for vacancy in recommended_vacancies %}
+                                    <a href="{{ url_for('vacancy_detail', vacancy_id=vacancy.id) }}" class="list-group-item list-group-item-action">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">{{ vacancy.title }}</h6>
+                                            <small class="text-success">{{ vacancy.get_salary_display() }}</small>
+                                        </div>
+                                        <p class="mb-1 small">
+                                            <i class="bi bi-building"></i> {{ vacancy.company }}
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-geo-alt"></i> {{ vacancy.location or 'Не указано' }}
+                                        </p>
+                                        <div class="mt-1">
+                                            {% for skill in vacancy.skills[:3] %}
+                                            <span class="badge bg-primary me-1">{{ skill.name }}</span>
+                                            {% endfor %}
+                                            {% if vacancy.skills|length > 3 %}
+                                            <span class="badge bg-secondary">+{{ vacancy.skills|length - 3 }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <small class="text-muted">{{ vacancy.source }}</small>
+                                    </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted text-center py-4">
+                                    <i class="bi bi-info-circle"></i>
+                                    Пока нет рекомендаций. Добавьте больше навыков в профиль.
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="courses" role="tabpanel">
+                        <div id="course-recommendations">
+                            {% if recommended_courses %}
+                                <div class="list-group">
+                                    {% for course in recommended_courses %}
+                                    <a href="{{ url_for('course_detail', course_id=course.id) }}" class="list-group-item list-group-item-action">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <h6 class="mb-1">{{ course.title }}</h6>
+                                            <div>
+                                                <span class="badge bg-warning text-dark me-1">★ {{ "%.1f"|format(course.rating) if course.rating else '0.0' }}</span>
+                                                {% if course.price == 0 %}
+                                                <span class="badge bg-success">Бесплатно</span>
+                                                {% else %}
+                                                <span class="badge bg-primary">{{ course.price }} {{ course.price_currency }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <p class="mb-1 small">
+                                            <i class="bi bi-building"></i> {{ course.provider }}
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-bar-chart"></i>
+                                            {% if course.level == 'beginner' %}Начальный{% elif course.level == 'intermediate' %}Средний{% elif course.level == 'advanced' %}Продвинутый{% else %}{{ course.level }}{% endif %}
+                                        </p>
+                                        <div class="mt-1">
+                                            {% for skill in course.skills[:3] %}
+                                            <span class="badge bg-primary me-1">{{ skill.name }}</span>
+                                            {% endfor %}
+                                        </div>
+                                        <small class="text-muted">{{ course.source }}</small>
+                                    </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted text-center py-4">
+                                    <i class="bi bi-info-circle"></i>
+                                    Пока нет рекомендаций. Добавьте больше навыков в профиль.
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- История просмотров -->
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-clock-history"></i> История просмотров</h4>
+            </div>
+            <div class="card-body">
+                {% if history and history.views %}
+                    <div class="list-group">
+                        {% for view in history.views[:10] %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    {% if view.content_type == 'vacancy' %}
+                                        <i class="bi bi-briefcase text-success me-2"></i>
+                                        {% set item = Vacancy.query.get(view.content_id) %}
+                                        {% if item %}
+                                            <a href="{{ url_for('vacancy_detail', vacancy_id=item.id) }}" class="text-decoration-none">{{ item.title }}</a>
+                                        {% else %}
+                                            <span class="text-muted">Удаленная вакансия</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <i class="bi bi-book text-info me-2"></i>
+                                        {% set item = Course.query.get(view.content_id) %}
+                                        {% if item %}
+                                            <a href="{{ url_for('course_detail', course_id=item.id) }}" class="text-decoration-none">{{ item.title }}</a>
+                                        {% else %}
+                                            <span class="text-muted">Удаленный курс</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </h6>
+                                <small class="text-muted">{{ view.viewed_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-4">
+                        <i class="bi bi-eye-slash"></i>
+                        История просмотров пуста
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- История поиска -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-search-heart"></i> История поиска</h4>
+            </div>
+            <div class="card-body">
+                {% if history and history.searches %}
+                    <div class="list-group">
+                        {% for search in history.searches[:10] %}
+                        <a href="{{ url_for('search') }}?q={{ search.query }}&type={{ search.content_type }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <span>
+                                    {% if search.content_type == 'vacancy' %}
+                                        <i class="bi bi-briefcase text-success me-2"></i>
+                                    {% else %}
+                                        <i class="bi bi-book text-info me-2"></i>
+                                    {% endif %}
+                                    "{{ search.query or 'Без запроса' }}"
+                                </span>
+                                <small class="text-muted">{{ search.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-4">
+                        <i class="bi bi-search"></i>
+                        История поиска пуста
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Форма для удаления навыка (скрытая) -->
+<form id="remove-skill-form" method="POST" style="display: none;">
+    <input type="hidden" name="skill_id" id="remove-skill-id">
+</form>
+
+<script>
+function removeSkill(skillId) {
+    if (confirm('Вы уверены, что хотите удалить этот навык?')) {
+        // Создаем форму и отправляем POST запрос
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/skills/remove/' + skillId;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

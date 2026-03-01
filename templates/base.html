@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Job & Course Recommender{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .spin {
+            animation: spin 2s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .dropdown-menu-dark {
+            background-color: #2d2d44;
+            border: 1px solid #3d3d5c;
+        }
+        .dropdown-item {
+            color: #f5f6fa;
+        }
+        .dropdown-item:hover {
+            background-color: #6c5ce7;
+            color: white;
+        }
+        .modal-content {
+            border: 1px solid #3d3d5c;
+        }
+        .form-check-input:checked {
+            background-color: #6c5ce7;
+            border-color: #6c5ce7;
+        }
+        .notification-toast {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border: none;
+            animation: slideIn 0.3s ease-out;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .btn-outline-primary, .btn-outline-success, .btn-outline-info, .btn-outline-secondary {
+            transition: all 0.3s ease;
+        }
+        .btn-outline-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(108, 92, 231, 0.3);
+        }
+        .btn-outline-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 184, 148, 0.3);
+        }
+        .form-check-label {
+            color: #f5f6fa;
+            cursor: pointer;
+        }
+        .form-check:hover {
+            background-color: #3d3d5c;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-briefcase"></i> Job & Course Finder
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('search') }}">
+                            <i class="bi bi-search"></i> Поиск
+                        </a>
+                    </li>
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('profile') }}">
+                            <i class="bi bi-person"></i> Профиль
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="dataDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-arrow-repeat"></i> Данные
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><h6 class="dropdown-header">Вакансии</h6></li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="updateVacancies('quick')">
+                                    <i class="bi bi-lightning"></i> Быстрое (IT)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="updateVacancies('full')">
+                                    <i class="bi bi-cloud-download"></i> Полное
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#vacancyCategoryModal">
+                                    <i class="bi bi-tags"></i> По категориям
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Курсы</h6></li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="updateCourses('quick')">
+                                    <i class="bi bi-lightning"></i> Быстрое (IT)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="updateCourses('full')">
+                                    <i class="bi bi-cloud-download"></i> Полное
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#courseCategoryModal">
+                                    <i class="bi bi-tags"></i> По категориям
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="showDataStatus()">
+                                    <i class="bi bi-info-circle"></i> Статус данных
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="{{ url_for('profile') }}">Профиль</a></li>
+                            <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#updateDataModal">Обновить данные</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Выйти</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login') }}">Вход</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('register') }}">Регистрация</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Модальное окно для категорий вакансий -->
+    <div class="modal fade" id="vacancyCategoryModal" tabindex="-1" aria-labelledby="vacancyCategoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="vacancyCategoryModalLabel">
+                        <i class="bi bi-tags"></i> Выберите категории вакансий
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatIt" value="it">
+                                <label class="form-check-label" for="vacCatIt">💻 IT и технологии</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatMedicine" value="medicine">
+                                <label class="form-check-label" for="vacCatMedicine">🏥 Медицина</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatEducation" value="education">
+                                <label class="form-check-label" for="vacCatEducation">📚 Образование</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatFinance" value="finance">
+                                <label class="form-check-label" for="vacCatFinance">💰 Финансы</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatSales" value="sales">
+                                <label class="form-check-label" for="vacCatSales">📊 Продажи</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatConstruction" value="construction">
+                                <label class="form-check-label" for="vacCatConstruction">🏗️ Строительство</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatTransport" value="transport">
+                                <label class="form-check-label" for="vacCatTransport">🚚 Транспорт</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatService" value="service">
+                                <label class="form-check-label" for="vacCatService">🍽️ Сервис</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatManagement" value="management">
+                                <label class="form-check-label" for="vacCatManagement">📋 Управление</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatMarketing" value="marketing">
+                                <label class="form-check-label" for="vacCatMarketing">📈 Маркетинг</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatHr" value="hr">
+                                <label class="form-check-label" for="vacCatHr">👥 HR</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatDesign" value="design">
+                                <label class="form-check-label" for="vacCatDesign">🎨 Дизайн</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatLaw" value="law">
+                                <label class="form-check-label" for="vacCatLaw">⚖️ Юриспруденция</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input vacancy-cat" type="checkbox" id="vacCatManufacturing" value="manufacturing">
+                                <label class="form-check-label" for="vacCatManufacturing">🏭 Производство</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="updateVacanciesByCategory()">
+                        <i class="bi bi-play"></i> Обновить выбранные
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для категорий курсов -->
+    <div class="modal fade" id="courseCategoryModal" tabindex="-1" aria-labelledby="courseCategoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="courseCategoryModalLabel">
+                        <i class="bi bi-tags"></i> Выберите категории курсов
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatProgramming" value="programming">
+                                <label class="form-check-label" for="courseCatProgramming">💻 Программирование</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatMedicine" value="medicine">
+                                <label class="form-check-label" for="courseCatMedicine">🏥 Медицина</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatEducation" value="education">
+                                <label class="form-check-label" for="courseCatEducation">📚 Педагогика</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatFinance" value="finance">
+                                <label class="form-check-label" for="courseCatFinance">💰 Финансы</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatMarketing" value="marketing">
+                                <label class="form-check-label" for="courseCatMarketing">📈 Маркетинг</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatDesign" value="design">
+                                <label class="form-check-label" for="courseCatDesign">🎨 Дизайн</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatLanguages" value="languages">
+                                <label class="form-check-label" for="courseCatLanguages">🌍 Иностранные языки</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatPsychology" value="psychology">
+                                <label class="form-check-label" for="courseCatPsychology">🧠 Психология</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatManagement" value="management">
+                                <label class="form-check-label" for="courseCatManagement">📋 Управление</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatConstruction" value="construction">
+                                <label class="form-check-label" for="courseCatConstruction">🏗️ Строительство</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatEngineering" value="engineering">
+                                <label class="form-check-label" for="courseCatEngineering">🔧 Инженерия</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input course-cat" type="checkbox" id="courseCatBusiness" value="business">
+                                <label class="form-check-label" for="courseCatBusiness">💼 Бизнес</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-success" onclick="updateCoursesByCategory()">
+                        <i class="bi bi-play"></i> Обновить выбранные
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Прогресс-бар для отслеживания обновления -->
+    <div class="modal fade" id="progressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="progressModalLabel">
+                        <i class="bi bi-arrow-repeat spin"></i> Обновление данных
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <p id="progressStatus">Подготовка к обновлению...</p>
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+                             id="progressBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="text-center" id="progressDetails"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="closeProgressBtn" disabled onclick="closeProgressModal()">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно со статусом данных -->
+    <div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="statusModalLabel">
+                        <i class="bi bi-info-circle"></i> Статус данных
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="statusContent">
+                    Загрузка...
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary" onclick="refreshStatus()">
+                        <i class="bi bi-arrow-repeat"></i> Обновить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main class="container mt-4">
+        <div id="notification-area"></div>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer mt-5 py-3 bg-light">
+        <div class="container text-center">
+            <span class="text-muted">© 2024 Интеллектуальная система поиска вакансий и курсов</span>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <script>
+        // Глобальные функции для управления данными
+
+        // Функции для обновления вакансий
+        function updateVacancies(type) {
+            let title = type === 'quick' ? 'Быстрое обновление вакансий' : 'Полное обновление вакансий';
+            let message = type === 'quick' ? 'Обновление IT-вакансий...' : 'Обновление всех вакансий...';
+
+            showProgress(title, message);
+
+            $.ajax({
+                url: '/api/update-data',
+                method: 'POST',
+                data: {
+                    type: type,
+                    data_type: 'vacancies'
+                },
+                success: function(data) {
+                    updateProgress(100, 'Обновление вакансий завершено!');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Вакансии успешно обновлены', 'success');
+                        location.reload();
+                    }, 1500);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error:', error);
+                    updateProgress(0, 'Ошибка при обновлении вакансий');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Ошибка при обновлении вакансий', 'danger');
+                    }, 2000);
+                }
+            });
+        }
+
+        // Функции для обновления курсов
+        function updateCourses(type) {
+            let title = type === 'quick' ? 'Быстрое обновление курсов' : 'Полное обновление курсов';
+            let message = type === 'quick' ? 'Обновление IT-курсов...' : 'Обновление всех курсов...';
+
+            showProgress(title, message);
+
+            $.ajax({
+                url: '/api/update-data',
+                method: 'POST',
+                data: {
+                    type: type,
+                    data_type: 'courses'
+                },
+                success: function(data) {
+                    updateProgress(100, 'Обновление курсов завершено!');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Курсы успешно обновлены', 'success');
+                        location.reload();
+                    }, 1500);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error:', error);
+                    updateProgress(0, 'Ошибка при обновлении курсов');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Ошибка при обновлении курсов', 'danger');
+                    }, 2000);
+                }
+            });
+        }
+
+        // Обновление вакансий по категориям
+        function updateVacanciesByCategory() {
+            let categories = [];
+            $('.vacancy-cat:checked').each(function() {
+                categories.push($(this).val());
+            });
+
+            if (categories.length === 0) {
+                showNotification('Выберите хотя бы одну категорию', 'warning');
+                return;
+            }
+
+            $('#vacancyCategoryModal').modal('hide');
+            showProgress('Обновление вакансий по категориям', `Выбрано категорий: ${categories.length}`);
+
+            $.ajax({
+                url: '/api/update-data',
+                method: 'POST',
+                data: {
+                    type: 'categories',
+                    categories: JSON.stringify(categories),
+                    data_type: 'vacancies'
+                },
+                success: function(data) {
+                    updateProgress(100, 'Обновление вакансий завершено!');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Вакансии успешно обновлены', 'success');
+                        location.reload();
+                    }, 1500);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error:', error);
+                    updateProgress(0, 'Ошибка при обновлении вакансий');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Ошибка при обновлении вакансий', 'danger');
+                    }, 2000);
+                }
+            });
+        }
+
+        // Обновление курсов по категориям
+        function updateCoursesByCategory() {
+            let categories = [];
+            $('.course-cat:checked').each(function() {
+                categories.push($(this).val());
+            });
+
+            if (categories.length === 0) {
+                showNotification('Выберите хотя бы одну категорию', 'warning');
+                return;
+            }
+
+            $('#courseCategoryModal').modal('hide');
+            showProgress('Обновление курсов по категориям', `Выбрано категорий: ${categories.length}`);
+
+            $.ajax({
+                url: '/api/update-data',
+                method: 'POST',
+                data: {
+                    type: 'categories',
+                    categories: JSON.stringify(categories),
+                    data_type: 'courses'
+                },
+                success: function(data) {
+                    updateProgress(100, 'Обновление курсов завершено!');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Курсы успешно обновлены', 'success');
+                        location.reload();
+                    }, 1500);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error:', error);
+                    updateProgress(0, 'Ошибка при обновлении курсов');
+                    setTimeout(() => {
+                        $('#progressModal').modal('hide');
+                        showNotification('Ошибка при обновлении курсов', 'danger');
+                    }, 2000);
+                }
+            });
+        }
+
+        // Показать статус данных
+        function showDataStatus() {
+            $('#statusModal').modal('show');
+            refreshStatus();
+        }
+
+        function refreshStatus() {
+            $('#statusContent').html('<div class="text-center"><div class="spinner-border text-primary"></div></div>');
+            $.ajax({
+                url: '/api/data-status',
+                method: 'GET',
+                success: function(data) {
+                    let html = `
+                        <table class="table table-dark">
+                            <tr>
+                                <th><i class="bi bi-briefcase"></i> Вакансий:</th>
+                                <td class="text-end">${data.vacancies}</td>
+                            </tr>
+                            <tr>
+                                <th><i class="bi bi-book"></i> Курсов:</th>
+                                <td class="text-end">${data.courses}</td>
+                            </tr>
+                            <tr>
+                                <th><i class="bi bi-tags"></i> Навыков:</th>
+                                <td class="text-end">${data.skills}</td>
+                            </tr>
+                            <tr>
+                                <th><i class="bi bi-people"></i> Пользователей:</th>
+                                <td class="text-end">${data.users}</td>
+                            </tr>
+                            <tr>
+                                <th><i class="bi bi-database"></i> Размер БД:</th>
+                                <td class="text-end">${data.database_size} MB</td>
+                            </tr>
+                            <tr>
+                                <th><i class="bi bi-clock-history"></i> Последнее обновление:</th>
+                                <td class="text-end">${data.last_update || 'никогда'}</td>
+                            </tr>
+                        </table>
+                    `;
+                    $('#statusContent').html(html);
+                },
+                error: function() {
+                    $('#statusContent').html('<div class="alert alert-danger">Ошибка загрузки статуса</div>');
+                }
+            });
+        }
+
+        // Функция для показа прогресса
+        function showProgress(title, message) {
+            $('#progressStatus').text(message);
+            $('#progressBar').css('width', '0%');
+            $('#progressModal').modal('show');
+
+            window.progressInterval = setInterval(function() {
+                let currentWidth = parseInt($('#progressBar').css('width'));
+                if (currentWidth < 90) {
+                    $('#progressBar').css('width', (currentWidth + 2) + '%');
+                }
+            }, 1000);
+        }
+
+        function updateProgress(percent, finalMessage) {
+            clearInterval(window.progressInterval);
+            $('#progressBar').css('width', percent + '%');
+            $('#progressDetails').text(finalMessage);
+            $('#closeProgressBtn').prop('disabled', false);
+        }
+
+        function closeProgressModal() {
+            $('#progressModal').modal('hide');
+        }
+
+        // Функция для показа уведомлений
+        function showNotification(message, type) {
+            let icon = 'info-circle';
+            let bgClass = 'alert-info';
+
+            if (type === 'success') {
+                icon = 'check-circle';
+                bgClass = 'alert-success';
+            } else if (type === 'warning') {
+                icon = 'exclamation-triangle';
+                bgClass = 'alert-warning';
+            } else if (type === 'danger') {
+                icon = 'exclamation-circle';
+                bgClass = 'alert-danger';
+            }
+
+            let notification = `
+                <div class="alert ${bgClass} alert-dismissible fade show notification-toast" role="alert">
+                    <i class="bi bi-${icon} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            $('#notification-area').html(notification);
+
+            setTimeout(function() {
+                $('.notification-toast').fadeOut('slow', function() {
+                    $(this).remove();
+                });
+            }, 5000);
+        }
+
+        $(document).ready(function() {
+            // Активация тултипов
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

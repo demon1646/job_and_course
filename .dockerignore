@@ -1,0 +1,23 @@
+# .dockerignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+.venv
+venv
+ENV
+env
+instance/*.db
+logs/*
+.DS_Store
+*.log
+*.bak
+*.swp
+*.swo
+.git
+.github
+.vscode
+.idea
+README.md

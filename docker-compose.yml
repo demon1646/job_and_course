@@ -1,0 +1,24 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: alexeysmirnov85/job-course-finder:latest
+    container_name: job-course-finder
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./instance:/app/instance
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - DATABASE_URL=sqlite:////app/instance/job_course.db
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
