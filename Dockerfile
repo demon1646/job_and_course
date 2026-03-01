@@ -1,4 +1,4 @@
-﻿FROM python:3.11-slim
+FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -14,10 +14,9 @@ COPY . .
 
 RUN mkdir -p /app/instance
 
-# Удаляем проблемный .env файл если есть
-RUN rm -f .env
+RUN python init_db.py
+RUN python update_data.py --quick
 
-EXPOSE 7860
+EXPOSE 5000
 
-# Запуск с правильным хостом
-CMD python init_db.py && flask run --host=0.0.0.0 --port=7860
+CMD python app.py
