@@ -610,11 +610,25 @@
                 clearInterval(taskCheckInterval);
             }
             
+            let attempts = 0;
+            const maxAttempts = 300; // 10 минут (300 * 2 секунды = 600 секунд)
+            
             taskCheckInterval = setInterval(function() {
+                attempts++;
+                
+                // Если прошло слишком много времени, показываем предупреждение
+                if (attempts > maxAttempts) {
+                    clearInterval(taskCheckInterval);
+                    $('#progressStatus').text('Обновление занимает больше времени чем обычно...');
+                    $('#progressDetails').html('Проверьте логи на Render для деталей');
+                    showNotification('Обновление выполняется дольше обычного', 'warning');
+                    return;
+                }
+                
                 checkTaskStatus(taskId);
             }, 2000); // Проверяем каждые 2 секунды
         }
-
+        
         function checkTaskStatus(taskId) {
             $.ajax({
                 url: `/api/task-status/${taskId}`,
@@ -622,19 +636,47 @@
                 success: function(data) {
                     $('#taskStatus').text(data.message || 'выполняется...');
                     
-                    if (data.progress) {
+                    // Обновляем прогресс-бар
+                    if (data.progress !== undefined) {
                         $('#progressBar').css('width', data.progress + '%');
+                        $('#progressBar').attr('aria-valuenow', data.progress);
+                        
+                        // Меняем цвет в зависимости от прогресса
+                        if (data.progress < 30) {
+                            $('#progressBar').removeClass('bg-success').addClass('bg-info');
+                        } else if (data.progress < 70) {
+                            $('#progressBar').removeClass('bg-info').addClass('bg-primary');
+                        } else {
+                            $('#progressBar').removeClass('bg-primary').addClass('bg-success');
+                        }
+                    }
+                    
+                    // Добавляем время выполнения
+                    if (data.start_time) {
+                        let startTime = new Date(data.start_time);
+                        let now = new Date();
+                        let diff = Math.floor((now - startTime) / 1000);
+                        let minutes = Math.floor(diff / 60);
+                        let seconds = diff % 60;
+                        $('#progressDetails').html(`
+                            ID задачи: ${taskId}<br>
+                            Статус: <span id="taskStatus">${data.message}</span><br>
+                            Время выполнения: ${minutes} мин ${seconds} сек
+                        `);
                     }
                     
                     if (data.status === 'completed') {
                         clearInterval(taskCheckInterval);
                         updateProgress(100, 'Обновление успешно завершено!');
                         $('#closeProgressBtn').prop('disabled', false);
+                        $('#progressBar').removeClass('progress-bar-animated');
                         showNotification('Данные успешно обновлены', 'success');
+                        
+                        // Перезагружаем страницу через 3 секунды
                         setTimeout(() => {
                             $('#progressModal').modal('hide');
                             location.reload();
-                        }, 2000);
+                        }, 3000);
                     }
                     else if (data.status === 'error') {
                         clearInterval(taskCheckInterval);
@@ -643,8 +685,9 @@
                         showNotification('Ошибка при обновлении данных: ' + data.message, 'danger');
                     }
                 },
-                error: function() {
-                    console.log('Ошибка при проверке статуса задачи');
+                error: function(xhr, status, error) {
+                    console.log('Ошибка при проверке статуса задачи:', error);
+                    $('#taskStatus').text('Ошибка соединения...');
                 }
             });
         }
